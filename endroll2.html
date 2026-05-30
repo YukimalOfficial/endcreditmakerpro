@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>エンドロールメーカー Pro</title>
+    <style>
+        body { background-color: #111; color: #fff; font-family: sans-serif; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        h1 { font-size: 20px; margin-bottom: 15px; color: #aaa; }
+        .container { display: flex; gap: 20px; max-width: 1400px; width: 100%; }
+        .config-panel { flex: 1; background: #222; padding: 20px; border-radius: 8px; max-height: 90vh; overflow-y: auto; min-width: 340px; }
+        .view-panel { flex: 1.5; display: flex; flex-direction: column; align-items: center; position: relative; }
+        canvas { background: #000; border: 2px solid #444; border-radius: 4px; max-width: 100%; height: auto; cursor: default; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-size: 13px; color: #bbb; margin-bottom: 5px; font-weight: bold; }
+        textarea { width: 100%; height: 160px; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; padding: 10px; box-sizing: border-box; font-size: 13px; line-height: 1.6; resize: vertical; }
+        input[type="number"], input[type="file"], select, input[type="range"] { width: 100%; background: #333; color: #fff; border: 1px solid #555; border-radius: 4px; padding: 6px; box-sizing: border-box; }
+        input[type="number"] { width: 80px; }
+        input[type="range"] { background: none; border: none; padding: 0; }
+        input[type="color"] { width: 50px; height: 30px; border: none; cursor: pointer; background: none; }
+        select { pointer-events: auto; cursor: pointer; }
+        .switch-container { display: flex; align-items: center; gap: 10px; margin-top: 8px; margin-bottom: 5px; }
+        .switch-container input[type="checkbox"] { width: auto; cursor: pointer; transform: scale(1.2); }
+        .btn-group { display: flex; gap: 10px; margin-top: 20px; }
+        button { flex: 1; padding: 12px; font-size: 14px; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; }
+        .btn-preview { background: #444; color: white; }
+        .btn-record { background: #e50914; color: white; }
+        button:disabled { background: #555 !important; color: #888; cursor: not-allowed; }
+        #status { margin-top: 10px; font-size: 14px; color: #ffc107; font-weight: bold; }
+        audio { width: 100%; margin-top: 8px; }
+        
+        .tag-guide { background: #2a2a2a; padding: 10px; border-radius: 4px; font-size: 11px; color: #ccc; line-height: 1.5; border: 1px solid #444; }
+        .photo-list { background: #333; padding: 10px; border-radius: 4px; max-height: 120px; overflow-y: auto; margin-top: 8px; }
+        .photo-item { display: flex; align-items: center; justify-content: space-between; background: #444; padding: 6px; margin-bottom: 5px; border-radius: 4px; font-size: 12px; }
+        .photo-item img { height: 30px; border-radius: 2px; object-fit: cover; }
+        .photo-item button { flex: none; padding: 4px 8px; font-size: 11px; background: #d9534f; color: white; width: auto; }
+    </style>
+</head>
+<body>
+    <h1>エンドロールメーカー</h1>
+    <div class="container">
+        <div class="config-panel">
+            <div class="form-group">
+                <label for="text-input">エンドロールの文字</label>
+                <textarea id="text-input" oninput="onTextChange()">[T] THE MOVIE
+[Y] Directed by Christopher Nolan
+
+[C] Producer : Emma Thomas
+[C] Music by : Hans Zimmer
+
+[T] THANK YOU FOR WATCHING</textarea>
+                <div class="tag-guide">
+                    <strong>【特殊タグ】</strong> [T]巨大化 / [Y]黄色 / [G]緑 / [R]赤 / [B]青 / [M]等幅 / [C]左右2列分割
+                </div>
+            </div>
+            <div class="form-group" style="background:#333; padding:10px; border-radius:4px; border:1px solid #555;">
+                <label for="scroll-slider" style="color:#ffc107;">🔍 停止中の表示位置（文字を確認する）</label>
+                <input type="range" id="scroll-slider" min="0" max="1000" value="0" oninput="onSliderMove(this.value)">
+            </div>
+            
+            <div class="form-group">
+                <label for="bg-image-input">🖼️ 背景「写真・画像」をアップロード</label>
+                <input type="file" id="bg-image-input" accept="image/*" onchange="loadBgImage(this)">
+            </div>
+
+            <div class="form-group">
+                <label for="bg-video-input">🎥 背景「動画」をアップロード (MP4等)</label>
+                <input type="file" id="bg-video-input" accept="video/*" onchange="loadBgVideo(this)">
+                <div style="font-size:11px; color:#aaa; margin-top:4px;">※ 動画を設定すると画像より優先して背景にループ再生されます。</div>
+            </div>
+
+            <div class="form-group" style="background:#2b2b2b; padding:12px; border-radius:6px; border:1px solid #444;">
+                <label>📸 一幕にスクロールさせる写真をアップロード</label>
+                <input type="file" id="multi-photo-input" accept="image/*" multiple onchange="addPhotos(this)">
+                <div style="font-size:11px; color:#aaa; margin-top:4px;">※ 停止中に選択すると枠が出ます。右下でリサイズ、上の丸で回転可能。</div>
+                <div class="photo-list" id="photo-list-container">
+                    <div style="text-align:center; font-size:12px; padding:10px; color:#888;">写真がありません</div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>背景音楽（BGM）の設定</label>
+                <div class="switch-container">
+                    <input type="checkbox" id="use-bgm" checked onchange="toggleBgmSection()">
+                    <label for="use-bgm" style="display:inline; margin:0; font-weight:normal;">動画にBGMをつける</label>
+                </div>
+                <div id="bgm-upload-section">
+                    <input type="file" id="bgm-input" accept="audio/*" onchange="loadAudio(this)">
+                    <audio id="bgm-player" controls style="display:none;"></audio>
+                </div>
+            </div>
+            
+            <div class="form-group" style="display: flex; gap: 15px; flex-wrap: wrap;">
+                <div style="flex: 1; min-width: 120px;">
+                    <label for="font-family-input">フォントの種類</label>
+                    <select id="font-family-input" onchange="onTextChange()">
+                        <option value="sans-serif">ゴシック体</option>
+                        <option value="serif">明朝体</option>
+                    </select>
+                </div>
+                <div style="flex: 1; min-width: 120px;">
+                    <label for="align-input">文字の寄せ方</label>
+                    <select id="align-input" onchange="onTextChange()">
+                        <option value="center">中央寄せ</option>
+                        <option value="left">左寄せ</option>
+                        <option value="right">右寄せ</option>
+                    </select>
+                </div>
+                <div style="min-width: 80px;">
+                    <label for="color-input">文字の色</label>
+                    <input type="color" id="color-input" value="#ffffff" onchange="onTextChange()">
+                </div>
+            </div>
+            
+            <div class="form-group" style="display: flex; gap: 20px;">
+                <div>
+                    <label for="speed-input">流れる速度</label>
+                    <input type="number" id="speed-input" value="2" min="1" max="10">
+                </div>
+                <div>
+                    <label for="font-size-input">文字サイズ (px)</label>
+                    <input type="number" id="font-size-input" value="40" min="20" max="80" onchange="onTextChange()">
+                </div>
+            </div>
+
+            <div class="btn-group">
+                <button class="btn-preview" id="btn-preview" onclick="startPreview()">▶ プレビュー再生</button>
+                <button class="btn-record" id="btn-record" onclick="startRecording()">🎬 動画を書き出し（MP4）</button>
+            </div>
+            <div id="status"></div>
+        </div>
+        <div class="view-panel">
+            <canvas id="movieCanvas" width="1280" height="720"></canvas>
+        </div>
+    </div>
+    <script>
+        const canvas = document.getElementById("movieCanvas");
+        const ctx = canvas.getContext("2d");
+        const bgmPlayer = document.getElementById("bgm-player");
+        
+        let animationId;
+        let mediaRecorder;
+        let recordedChunks = [];
+        let isRecording = false;
+        let isPlaying = false; 
+        let audioContext, audioSource, audioDestination;
+        
+        let bgImage = null;
+        let bgVideo = null;
+        let photos = [];
+        let scrollY = 0;
+        let maxScroll = 0;
+        let selectedPhoto = null;
+
+        let isDragging = false;
+        let isResizing = false;
+        let isRotating = false;
+        let dragOffsetX = 0;
+        let dragOffsetY = 0;
+        let startAngle = 0;
+        let startDist = 0;
+        let initialWidth = 0;
+        let initialHeight = 0;
+
+        window.onload = function() {
+            resetScroll();
+            draw();
+            setupCanvasInteraction();
+        };
+
+        function onTextChange() {
+            calculateMaxScroll();
+            if (!isPlaying) draw();
+        }
+
+        function toggleBgmSection() {
+            const section = document.getElementById("bgm-upload-section");
+            const isChecked = document.getElementById("use-bgm").checked;
+            section.style.display = isChecked ? "block" : "none";
+        }
+
+        function loadBgImage(input) {
+            if (input.files && input.files) {
+                bgVideo = null;
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.onload = function() {
+                        bgImage = img;
+                        draw();
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(input.files);
+            }
+        }
+
+        function loadBgVideo(input) {
+            if (input.files && input.files) {
+                bgImage = null;
+                const video = document.createElement("video");
+                video.src = URL.createObjectURL(input.files);
+                video.muted = true;
+                video.loop = true;
+                video.playsInline = true;
+                video.onloadeddata = function() {
+                    bgVideo = video;
+                    if (!isPlaying) draw();
+                };
+            }
+        }
+
+        function addPhotos(input) {
+            if (!input.files) return;
+            const promises = Array.from(input.files).map(function(file) {
+                return new Promise(function(resolve) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const img = new Image();
+                        img.onload = function() {
+                            const photo = {
+                                id: Date.now() + Math.random(),
+                                img: img,
+                                name: file.name,
+                                x: canvas.width / 2 - 150,
+                                y: scrollY + canvas.height / 2 - 100,
+                                w: 300,
+                                h: (300 / img.width) * img.height,
+                                angle: 0
+                            };
+                            photos.push(photo);
+                            resolve();
+                        };
+                        img.src = e.target.result;
+                    };
+                    reader.readAsDataURL(file);
+                });
+            });
+            Promise.all(promises).then(function() {
+                updatePhotoList();
+                calculateMaxScroll();
+                draw();
+            });
+        }
+
+        function updatePhotoList() {
+            const container = document.getElementById("photo-list-container");
+            if (photos.length === 0) {
+                container.innerHTML = '<div style="text-align:center; font-size:12px; padding:10px; color:#888;">写真がありません</div>';
+                return;
+            }
+            container.innerHTML = "";
+            photos.forEach(function(photo) {
+                const item = document.createElement("div");
+                item.className = "photo-item";
+                item.innerHTML = '<img src="' + photo.img.src + '">' +
+                    '<span style="flex:1; margin-left:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + photo.name + '</span>' +
+                    '<button onclick="deletePhoto(' + photo.id + ')">削除</button>';
+                container.appendChild(item);
+            });
+        }
+
+        function deletePhoto(id) {
+            photos = photos.filter(function(p) { return p.id !== id; });
+            selectedPhoto = null;
+            updatePhotoList();
+            calculateMaxScroll();
+            draw();
+        }
+
+        function loadAudio(input) {
+            if (input.files && input.files) {
+                bgmPlayer.src = URL.createObjectURL(input.files);
+                bgmPlayer.style.display = "block";
+            }
+        }
+        function calculateMaxScroll() {
+            const baseFontSize = parseInt(document.getElementById("font-size-input").value);
+            const lines = document.getElementById("text-input").value.split("\n");
+            let currentY = canvas.height;
+            lines.forEach(function(line) {
+                let fs = baseFontSize;
+                if (line.indexOf("[T]") === 0) {
+                    fs = baseFontSize * 1.5;
+                }
+                currentY += fs * 1.6;
+            });
+            let maxPhotoY = 0;
+            photos.forEach(function(p) {
+                if (p.y + p.h > maxPhotoY) {
+                    maxPhotoY = p.y + p.h;
+                }
+            });
+            maxScroll = Math.max(currentY, maxPhotoY);
+            document.getElementById("scroll-slider").max = Math.floor(maxScroll);
+        }
+
+        function resetScroll() {
+            scrollY = 0;
+            document.getElementById("scroll-slider").value = 0;
+        }
+
+        function onSliderMove(val) {
+            if (isPlaying) return;
+            scrollY = parseFloat(val);
+            draw();
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (bgVideo) {
+                ctx.drawImage(bgVideo, 0, 0, canvas.width, canvas.height);
+            } else if (bgImage) {
+                ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
+            } else {
+                ctx.fillStyle = "#000000";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+
+            photos.forEach(function(photo) {
+                ctx.save();
+                const renderY = photo.y - scrollY;
+                ctx.translate(photo.x + photo.w / 2, renderY + photo.h / 2);
+                ctx.rotate(photo.angle);
+                ctx.drawImage(photo.img, -photo.w / 2, -photo.h / 2, photo.w, photo.h);
+
+                if (!isPlaying && selectedPhoto === photo) {
+                    ctx.strokeStyle = "#007bff";
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(-photo.w / 2, -photo.h / 2, photo.w, photo.h);
+                    ctx.fillStyle = "#007bff";
+                    ctx.fillRect(photo.w / 2 - 6, photo.h / 2 - 6, 12, 12);
+                    ctx.beginPath();
+                    ctx.arc(0, -photo.h / 2 - 15, 6, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.moveTo(0, -photo.h / 2);
+                    ctx.lineTo(0, -photo.h / 2 - 15);
+                    ctx.stroke();
+                }
+                ctx.restore();
+            });
+
+            drawTextLayer();
+        }
+
+        function drawTextLayer() {
+            const baseFontSize = parseInt(document.getElementById("font-size-input").value);
+            const fontFamily = document.getElementById("font-family-input").value;
+            const globalAlign = document.getElementById("align-input").value;
+            const defaultColor = document.getElementById("color-input").value;
+            const lines = document.getElementById("text-input").value.split("\n");
+            let currentY = canvas.height - scrollY;
+
+            lines.forEach(function(line) {
+                let text = line;
+                let color = defaultColor;
+                let fontSize = baseFontSize;
+                let isMonospace = false;
+                let isColumns = false;
+
+                while (text.indexOf("[") === 0 && text.indexOf("]") === 2) {
+                    const tag = text.substring(0, 3);
+                    text = text.substring(3);
+                    if (tag === "[T]") fontSize = baseFontSize * 1.5;
+                    if (tag === "[Y]") color = "#ffff00"; 
+                    if (tag === "[G]") color = "#00ff00"; 
+                    if (tag === "[R]") color = "#ff0000"; 
+                    if (tag === "[B]") color = "#0000ff"; 
+                    if (tag === "[M]") isMonospace = true;
+                    if (tag === "[C]") isColumns = true;
+                }
+
+                ctx.font = "bold " + fontSize + "px " + (isMonospace ? "monospace, Courier" : fontFamily);
+                ctx.fillStyle = color;
+                const fontMetrics = fontSize * 1.6;
+
+                if (currentY + fontSize > 0 && currentY - fontSize < canvas.height) {
+                    if (isColumns) {
+                        const colonIndex = text.indexOf(":");
+                        let leftText = text;
+                        let rightText = "";
+                        
+                        if (colonIndex !== -1) {
+                            leftText = text.substring(0, colonIndex).trim();
+                            rightText = text.substring(colonIndex + 1).trim();
+                        }
+
+                        ctx.textAlign = "right";
+                        ctx.fillText(leftText, canvas.width / 2 - 20, currentY);
+                        ctx.textAlign = "left";
+                        ctx.fillText(rightText, canvas.width / 2 + 20, currentY);
+                    } else {
+                        ctx.textAlign = globalAlign;
+                        let drawX = canvas.width / 2;
+                        if (globalAlign === "left") drawX = 50;
+                        if (globalAlign === "right") drawX = canvas.width - 50;
+                        ctx.fillText(text, drawX, currentY);
+                    }
+                }
+                currentY += fontMetrics;
+            });
+        }
+        function startPreview() {
+            if (isPlaying) {
+                stopPlayback();
+                return;
+            }
+            isPlaying = true;
+            document.getElementById("btn-preview").innerText = "⏹ 停止";
+            document.getElementById("btn-record").disabled = true;
+            selectedPhoto = null;
+
+            if (bgVideo) bgVideo.play().catch(function(){});
+            if (document.getElementById("use-bgm").checked && bgmPlayer.src) {
+                bgmPlayer.currentTime = (scrollY / maxScroll) * bgmPlayer.duration || 0;
+                bgmPlayer.play().catch(function(){});
+            }
+            animate();
+        }
+
+        function stopPlayback() {
+            isPlaying = false;
+            document.getElementById("btn-preview").innerText = "▶ プレビュー再生";
+            document.getElementById("btn-record").disabled = false;
+            if (bgVideo) bgVideo.pause();
+            bgmPlayer.pause();
+            cancelAnimationFrame(animationId);
+            draw();
+        }
+
+        function animate() {
+            if (!isPlaying) return;
+            scrollY += parseFloat(document.getElementById("speed-input").value);
+            document.getElementById("scroll-slider").value = Math.floor(scrollY);
+            if (scrollY >= maxScroll) {
+                resetScroll();
+                stopPlayback();
+                return;
+            }
+            draw();
+            animationId = requestAnimationFrame(animate);
+        }
+
+        async function startRecording() {
+            if (isRecording) return;
+            calculateMaxScroll();
+            resetScroll();
+            isRecording = true;
+            recordedChunks = [];
+            document.getElementById("btn-preview").disabled = true;
+            document.getElementById("btn-record").disabled = true;
+            const statusDiv = document.getElementById("status");
+            statusDiv.innerText = "🎬 動画生成中... 0%";
+
+            if (bgVideo) {
+                bgVideo.currentTime = 0;
+                await bgVideo.play();
+            }
+
+            const canvasStream = canvas.captureStream(60);
+            const useBgm = document.getElementById("use-bgm").checked && bgmPlayer.src;
+
+            if (useBgm) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                audioSource = audioContext.createMediaElementSource(bgmPlayer);
+                audioDestination = audioContext.createMediaStreamDestination();
+                audioSource.connect(audioDestination);
+                audioSource.connect(audioContext.destination);
+                canvasStream.addTrack(audioDestination.stream.getAudioTracks());
+                bgmPlayer.currentTime = 0;
+                await bgmPlayer.play();
+            }
+
+            try {
+                mediaRecorder = new MediaRecorder(canvasStream, { mimeType: 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"', videoBitsPerSecond: 5000000 });
+            } catch (e) {
+                mediaRecorder = new MediaRecorder(canvasStream, { mimeType: 'video/webm', videoBitsPerSecond: 5000000 });
+            }
+
+            mediaRecorder.ondataavailable = function(e) {
+                if (e.data && e.data.size > 0) recordedChunks.push(e.data);
+            };
+            
+            mediaRecorder.onstop = function() {
+                const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType });
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(blob);
+                a.download = "endroll_" + Date.now() + ".mp4";
+                a.click();
+                if (bgVideo) bgVideo.pause();
+                if (useBgm) {
+                    bgmPlayer.pause();
+                    bgmPlayer.currentTime = 0;
+                }
+                isRecording = false;
+                document.getElementById("btn-preview").disabled = false;
+                document.getElementById("btn-record").disabled = false;
+                statusDiv.innerText = "✨ 書き出しが完了しました！";
+                setTimeout(function() { statusDiv.innerText = ""; }, 4000);
+                resetScroll();
+                draw();
+            };
+
+            mediaRecorder.start();
+            const speed = parseFloat(document.getElementById("speed-input").value);
+            
+            function recordFrame() {
+                if (!isRecording) return;
+                scrollY += speed;
+                const progress = Math.min(100, Math.floor((scrollY / maxScroll) * 100));
+                statusDiv.innerText = "🎬 動画生成中... " + progress + "%";
+                if (scrollY >= maxScroll) {
+                    mediaRecorder.stop();
+                    return;
+                }
+                draw();
+                requestAnimationFrame(recordFrame);
+            }
+            requestAnimationFrame(recordFrame);
+        }
+
+        function setupCanvasInteraction() {
+            function getMousePos(e) {
+                const rect = canvas.getBoundingClientRect();
+                return {
+                    x: (e.clientX - rect.left) * (canvas.width / rect.width),
+                    y: (e.clientY - rect.top) * (canvas.height / rect.height)
+                };
+            }
+
+            canvas.addEventListener("mousedown", function(e) {
+                if (isPlaying) return;
+                const pos = getMousePos(e);
+                const clickX = pos.x;
+                const clickY = pos.y + scrollY;
+
+                for (let i = photos.length - 1; i >= 0; i--) {
+                    const p = photos[i];
+                    if (selectedPhoto === p) {
+                        const rad = p.angle;
+                        const cx = p.x + p.w / 2;
+                        const cy = p.y + p.h / 2;
+                        const rx = (clickX - cx) * Math.cos(-rad) - (clickY - cy) * Math.sin(-rad);
+                        const ry = (clickX - cx) * Math.sin(-rad) + (clickY - cy) * Math.cos(-rad);
+
+                        if (Math.hypot(rx, ry - (-p.h / 2 - 15)) < 10) {
+                            isRotating = true;
+                            startAngle = p.angle - Math.atan2(clickX - cx, -(clickY - cy));
+                            return;
+                        }
+                        if (Math.abs(rx - p.w / 2) < 12 && Math.abs(ry - p.h / 2) < 12) {
+                            isResizing = true;
+                            startDist = Math.hypot(rx, ry);
+                            initialWidth = p.w;
+                            initialHeight = p.h;
+                            return;
+                        }
+                    }
+                    const cx = p.x + p.w / 2;
+                    const cy = p.y + p.h / 2;
+                    const rx = (clickX - cx) * Math.cos(-p.angle) - (clickY - cy) * Math.sin(-p.angle);
+                    const ry = (clickX - cx) * Math.sin(-p.angle) + (clickY - cy) * Math.cos(-p.angle);
+
+                    if (rx >= -p.w / 2 && rx <= p.w / 2 && ry >= -p.h / 2 && ry <= p.h / 2) {
+                        selectedPhoto = p;
+                        isDragging = true;
+                        dragOffsetX = clickX - p.x;
+                        dragOffsetY = clickY - p.y;
+                        draw();
+                        return;
+                    }
+                }
+                selectedPhoto = null;
+                draw();
+            });
+
+            canvas.addEventListener("mousemove", function(e) {
+                if (!selectedPhoto) return;
+                const pos = getMousePos(e);
+                const mouseX = pos.x;
+                const mouseY = pos.y + scrollY;
+                const cx = selectedPhoto.x + selectedPhoto.w / 2;
+                const cy = selectedPhoto.y + selectedPhoto.h / 2;
+
+                if (isDragging) {
+                    selectedPhoto.x = mouseX - dragOffsetX;
+                    selectedPhoto.y = mouseY - dragOffsetY;
+                } else if (isResizing) {
+                    const rx = (mouseX - cx) * Math.cos(-selectedPhoto.angle) - (mouseY - cy) * Math.sin(-selectedPhoto.angle);
+                    const ry = (mouseX - cx) * Math.sin(-selectedPhoto.angle) + (mouseY - cy) * Math.cos(-selectedPhoto.angle);
+                    const ratio = Math.hypot(rx, ry) / startDist;
+                    selectedPhoto.w = Math.max(30, initialWidth * ratio);
+                    selectedPhoto.h = Math.max(30, initialHeight * ratio);
+                    selectedPhoto.x = cx - selectedPhoto.w / 2;
+                    selectedPhoto.y = cy - selectedPhoto.h / 2;
+                } else if (isRotating) {
+                    selectedPhoto.angle = startAngle + Math.atan2(mouseX - cx, -(mouseY - cy));
+                }
+
+                if (isDragging || isResizing || isRotating) draw();
+            });
+
+            window.addEventListener("mouseup", function() {
+                if (isDragging || isResizing || isRotating) {
+                    isDragging = false;
+                    isResizing = false;
+                    isRotating = false;
+                    calculateMaxScroll();
+                }
+            });
+        }
+    </script>
+</body>
+</html>
